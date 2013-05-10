@@ -4,10 +4,10 @@
 import simplejson
 import MeCab
 import re
+import time
 #from multiprocessing import Pool
 
 filter_list = ['AKB']
-#link_pattern = re.compile("http(s)?://([\w-]+\.)+[\w-]+(/[\w- ./?%&=]*)?")
 link_pattern = re.compile ('(https?://[A-Za-z0-9\'~+\-=_.,/%\?!;:@#\*&\(\)]+)')
 
 def preformat(line):
@@ -33,8 +33,8 @@ def httpFilter(line):
 
 class Distributer(object):
     """ テスト段階、そのうち外部モジュールに切るかも """
-    __all_words = []
-    __election_words = []
+    __all_words = {}
+    __election_words = {}
     def __init__ (self):
         pass
 
@@ -46,44 +46,50 @@ class Distributer(object):
             return True
 
     def extractToElection(self,words_list):
+        All = self.__all_words
+        Election = self.__election_words
         for word in words_list:
-            if word in self.__election_words:
-                pass
+            if word in Election:
+                Election[word] += 1
             else:
-                self.__election_words.append(word)
-                if word in self.__all_words:
-                    self.__all_words.append(word)
+                Election[word] = 0
+                if word in All:
+                    All[word] += 1
                 else:
-                    pass
+                    All[word] = 0
+                    
 
     def extractToAll(self,words_list):
+        All = self.__all_words
         for word in words_list:
-            if word in self.__all_words:
-                pass
+            if word in All:
+                All[word] += 1
             else:
-                self.__all_words.append(word)
+                All[word] = 0
 
-    def showElectionList(self):
-        for word in self.__election_words:
+    def showElectionKeys(self):
+        for word in self.__election_words.keys():
             print word + ' ',
         print 
         
-    def showAllList(self):
-        for word in self.__all_words:
+    def showAllKeys(self):
+        for word in self.__all_words.keys():
             print word + ' ',
         print
 
-    def writeElectionList(self,output):
-        for word in self.__election_words:
-            output.write(word+' ')
-        output.write('\n')
-
-    def writeAllList(self,output):
-        for word in self.__all_words:
-            output.write(word+' ')
+    def writeDict(self,output,ElectionOrAll):
+        if ElectionOrAll=="Election":
+            dictionary = self.__election_words
+        else:
+            dictionary = self.__all_words
+        for key,value in sorted(dictionary.items(),key=lambda x:x[1],reverse=True):
+            output.write(key + ':',)
+            output.write(str(value),)
+            output.write('  ',)
         output.write('\n')
         
 def main():
+    starttime = time.clock()
     input = open(argv[1], 'r')
     output= open(argv[2], 'w')
     dist = Distributer()
@@ -95,11 +101,16 @@ def main():
             dist.extractToElection(tweet_text)
         else:
             dist.extractToAll(tweet_text)
-    #dist.showElectionList()
-    dist.writeElectionList(output)
+    dist.showElectionKeys()
+    output.write("\n========== words around Election ==========\n")
+    dist.writeDict(output,"Election")
+    # output.write("\n========== all words ==========\n")
+    # dist.writeDict(output,"All")
     input.close()
     output.close()
-
+    endtime = time.clock()
+    print endtime-starttime
+    
 if __name__ == '__main__':
     import sys
     argv = sys.argv
