@@ -4,11 +4,23 @@
 import simplejson
 import MeCab
 import re
+import os
 import time
-#from multiprocessing import Pool
+import gzip
+#import multiprocessing
+from multiprocessing import Pool
+from distributer import Distributer
 
-filter_list = ['AKB']
+#filter_list = []  あからさまに関係ないツイートでもフィルターにはかけない
+hinshi_list = ['名詞','動詞','形容詞']
 link_pattern = re.compile ('(https?://[A-Za-z0-9\'~+\-=_.,/%\?!;:@#\*&\(\)]+)')
+query_list = ['賛成','反対']
+
+def httpFilter(line):
+    if "http" in line:
+        temp = line
+        line = link_pattern.sub(u"", temp)
+    return line
 
 def preformat(line):
     """一行を受け取り形態素解析をしてリストを返す"""
@@ -17,98 +29,61 @@ def preformat(line):
     node = tagger.parseToNode(encoded_line)
     keywords =[]
     while node:
-        genkei = node.feature.split(",")[6]
-        if genkei == "*":
-            keywords.append(node.surface)
-        else:
+        node_f = node.feature.split(",")
+        hinshi = node_f[0]
+        genkei = node_f[6]
+        if hinshi in hinshi_list:
+            if genkei == "*":
+                genkei = node.surface
+            elif previous=='名詞' and hinshi=='名詞':
+                genkei = keywords.pop() + genkei
             keywords.append(genkei)
+        previous = hinshi
         node = node.next
     return keywords
 
-def httpFilter(line):
-    if "http" in line:
-        temp = line
-        line = link_pattern.sub(u"", temp)
-    return line
 
-class Distributer(object):
-    """ テスト段階、そのうち外部モジュールに切るかも """
-    __all_words = {}
-    __election_words = {}
-    def __init__ (self):
-        pass
+dist = Distributer()
 
-    def isAboutElection(self,words_list):
-        if "選挙" in words_list:
-            for filter_word in filter_list:
-                if filter_word in words_list:
-                    return False
-            return True
-
-    def extractToElection(self,words_list):
-        All = self.__all_words
-        Election = self.__election_words
-        for word in words_list:
-            if word in Election:
-                Election[word] += 1
-            else:
-                Election[word] = 0
-                if word in All:
-                    All[word] += 1
-                else:
-                    All[word] = 0
-                    
-
-    def extractToAll(self,words_list):
-        All = self.__all_words
-        for word in words_list:
-            if word in All:
-                All[word] += 1
-            else:
-                All[word] = 0
-
-    def showElectionKeys(self):
-        for word in self.__election_words.keys():
-            print word + ' ',
-        print 
-        
-    def showAllKeys(self):
-        for word in self.__all_words.keys():
-            print word + ' ',
-        print
-
-    def writeDict(self,output,ElectionOrAll):
-        if ElectionOrAll=="Election":
-            dictionary = self.__election_words
-        else:
-            dictionary = self.__all_words
-        for key,value in sorted(dictionary.items(),key=lambda x:x[1],reverse=True):
-            output.write(key + ':',)
-            output.write(str(value),)
-            output.write('  ',)
-        output.write('\n')
-        
+def function(line):
+    tweet = simplejson.loads(line,"utf-8")
+    tweet["text"] = httpFilter(tweet["text"])
+    tweet_text = preformat(tweet["text"])[:-1]
+    if dist.isAboutElection(tweet_text,query_list):
+        dist.extractToElection(tweet_text)
+    else:
+        dist.extractToAll(tweet_text)
+    return dist.passElection()
+    
 def main():
     starttime = time.clock()
+
     input = open(argv[1], 'r')
     output= open(argv[2], 'w')
-    dist = Distributer()
-    for line in input:
-        tweet = simplejson.loads(line,"utf-8")
-        tweet["text"] = httpFilter(tweet["text"])
-        tweet_text = preformat(tweet["text"])
-        if dist.isAboutElection(tweet_text):
-            dist.extractToElection(tweet_text)
-        else:
-            dist.extractToAll(tweet_text)
-    dist.showElectionKeys()
+
+    pool = Pool(10)
+    dictionaryList = pool.map_async(function,input)
+
+    resultDict = {}
+    for dictionary in dictionaryList.get():
+        for key,value in dictionary.items():
+            if key in resultDict:
+                resultDict[key] += value
+            else:
+                resultDict[key] = 1
+
     output.write("\n========== words around Election ==========\n")
-    dist.writeDict(output,"Election")
-    # output.write("\n========== all words ==========\n")
-    # dist.writeDict(output,"All")
+    for key,value in sorted(resultDict.items(),key=lambda x:x[1],reverse=True):
+        output.write(key + ':',)
+        output.write(str(value),)
+        output.write('  ',)
+    output.write('\n')
+
     input.close()
     output.close()
+    
     endtime = time.clock()
+    print "time.clock:",
     print endtime-starttime
     
 if __name__ == '__main__':
