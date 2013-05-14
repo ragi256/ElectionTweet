@@ -3,14 +3,16 @@
 
 class Distributer(object):
     """ 分配器。与えられたクエリのリストがツイート文に含まれているかで分配
-        並列処理ではオブジェクトを共有してもメンバの辞書はリセットされるので
-        返り値をなんとか利用するしかない"""
-    __all_words = {}
-    __election_words = {}
+        クエリを含むならelection_wordsに追加。all_wordsは常に追加
+        一回の処理ごとにリストはリセットされるものと想定して設計(Poolの処理でそうなってしまう)"""
+    __all_words = []
+    __election_words = []
     def __init__ (self):
         pass
 
     def isAboutElection(self,words_list,query_list):
+        """連続した名詞は連結するため調べるword_listの要素を
+           直接比較せず、要素の文字列の中に一致するものがあるか調べる"""
         for query in query_list:
             for word in words_list:
                 if word.count(query)!=0:
@@ -26,44 +28,38 @@ class Distributer(object):
         All = self.__all_words
         Election = self.__election_words
         for word in words_list:
-            if word in Election:
-                Election[word] += 1
-            else:
-                Election[word] = 1
-                if word in All:
-                    All[word] += 1
-                else:
-                    All[word] = 1
+            if not word in Election:
+                Election.append(word)
+                if not word in All:
+                    All.append(word)
                     
 
     def extractToAll(self,words_list):
         All = self.__all_words
         for word in words_list:
-            if word in All:
-                All[word] += 1
-            else:
-                All[word] = 1
+            if not word in All:
+                All.append(word)
 
     def showElectionKeys(self):
         """ 並列処理では使えない"""
-        for word in self.__election_words.keys():
+        for word in self.__election_words:
             print word + ' ',
         print
         
     def showAllKeys(self):
         """ 並列処理では使えない"""
-        for word in self.__all_words.keys():
+        for word in self.__all_words:
             print word + ' ',
         print
 
     def writeDict(self,output,ElectionOrAll):
         """ 並列処理では使えない"""
         if ElectionOrAll=="Election":
-            dictionary = self.__election_words
+            words_list = self.__election_words
         else:
-            dictionary = self.__all_words
-        for key,value in sorted(dictionary.items(),key=lambda x:x[1],reverse=True):
-            output.write(key + ':' + str(value) + '  ',)
+            words_list = self.__all_words
+        for word in words_list:
+            output.write(word + " ",)
         output.write('\n')
         
     def passElection(self):

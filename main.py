@@ -23,7 +23,8 @@ def httpFilter(line):
     return line
 
 def preformat(line):
-    """一行を受け取り形態素解析をしてリストを返す"""
+    """一行を受け取り形態素解析をしてリストを返す
+       連続した名詞はできるだけ長くなるように結合する"""
     tagger = MeCab.Tagger('')
     encoded_line = line.encode('utf-8')
     node = tagger.parseToNode(encoded_line)
@@ -45,43 +46,65 @@ def preformat(line):
 
 dist = Distributer()
 
-def function(line):
-    tweet = simplejson.loads(line,"utf-8")
-    tweet["text"] = httpFilter(tweet["text"])
-    tweet_text = preformat(tweet["text"])[:-1]
-    if dist.isAboutElection(tweet_text,query_list):
-        dist.extractToElection(tweet_text)
-    else:
-        dist.extractToAll(tweet_text)
-    return dist.passElection()
+# def function1(line):
+#     tweet = simplejson.loads(line,"utf-8")
+#     tweet["text"] = httpFilter(tweet["text"])
+#     tweet_text = preformat(tweet["text"])[:-1]
+#     if dist.isAboutElection(tweet_text,query_list):
+#         dist.extractToElection(tweet_text)
+#     else:
+#         dist.extractToAll(tweet_text)
+#     return dist.passElection()
+
+# def wrapper(key):
+#     appearance = 0
+#     appear_rate_list = pool.map(function2,relevant_Dict.keys())
+#     tweet = simplejson.loads(line,"utf-8")
+#     tweet["text"] = httpFilter(tweet["text"])
+#     tweet_text = preformat(tweet["text"])[:-1]
+#     if key in tweet_text:
+
+#     appearance += 1
+
+        
+#     return appearance
+
+
+
     
 def main():
     starttime = time.clock()
 
-    input = open(argv[1], 'r')
+    Input = open(argv[1], 'r')
     output= open(argv[2], 'w')
 
     pool = Pool(10)
-    dictionaryList = pool.map_async(function,input)
+    relevant_lists = pool.map(function1,Input)
 
-    resultDict = {}
-    for dictionary in dictionaryList.get():
-        for key,value in dictionary.items():
-            if key in resultDict:
-                resultDict[key] += value
+    relevant_dict = {}
+    for relevant_list in relevant_lists:
+        for word in relevant_list:
+            word = word.encode('utf-8')
+            if word in relevant_dict.keys():
+                relevant_dict[word] += 1
             else:
-                resultDict[key] = 1
+                relevant_dict[word] = 1
 
     output.write("\n========== words around Election ==========\n")
-    for key,value in sorted(resultDict.items(),key=lambda x:x[1],reverse=True):
-        output.write(key + ':',)
-        output.write(str(value),)
-        output.write('  ',)
+    for key,value in sorted(rlevant_dict.items(),key=lambda x:x[1],reverse=True):
+        output.write(key + ':' + str(value) + '  ',)
     output.write('\n')
 
-    input.close()
+    Input.close()
     output.close()
     
+    # for key in relevant_dict.keys():
+        
+    #     appear_rate = wrapper(key)
+
+
+    # appear_rate_dict = {}    
+        
     endtime = time.clock()
     print "time.clock:",
     print endtime-starttime
