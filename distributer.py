@@ -15,7 +15,7 @@ class Distributer(object):
            直接比較せず、要素の文字列の中に一致するものがあるか調べる"""
         for query in query_list:
             for word in words_list:
-                if word.count(query)!=0:
+                if word.find(query)!=-1:
                     return True
         return False
                     
@@ -63,7 +63,11 @@ class Distributer(object):
         output.write('\n')
         
     def passElection(self):
+        self.__election_words = list(set(self.__election_words))
         return self.__election_words
 
+
     def passAll(self):
+        self.__all_words = list(set(self.__all_words))                         
         return self.__all_words
+
