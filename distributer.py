@@ -9,6 +9,10 @@ class Distributer(object):
     __election_words = []
     def __init__ (self):
         pass
+    
+    def reset(self):
+        self.__all_words = []
+        self.__election_words = []
 
     def isAboutElection(self,words_list,query_list):
         """連続した名詞は連結するため調べるword_listの要素を
@@ -28,7 +32,7 @@ class Distributer(object):
         All = self.__all_words
         Election = self.__election_words
         for word in words_list:
-            if not word in Election:
+            if len(word.decode('utf-8'))!=1 and not word in Election:
                 Election.append(word)
                 if not word in All:
                     All.append(word)
@@ -37,7 +41,7 @@ class Distributer(object):
     def extractToAll(self,words_list):
         All = self.__all_words
         for word in words_list:
-            if not word in All:
+            if len(word.decode('utf-8'))!=1 and not word in All:
                 All.append(word)
 
     def showElectionKeys(self):
