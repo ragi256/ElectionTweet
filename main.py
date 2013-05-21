@@ -7,25 +7,27 @@ import re
 import os
 import time
 import gzip
+from decimal import *
 from multiprocessing import Pool
 from distributer import Distributer
 
-#filter_list = []  あからさまに関係ないツイートでもフィルターにはかけない
+#filter_list = ['AKB']  あからさまに関係ないツイートでもフィルターにはかけない
 hinshi_list = ['名詞']#,'動詞','形容詞']
-link_pattern = re.compile ('(https?://[A-Za-z0-9\'~+\-=_.,/%\?!;:@#\*&\(\)]+)')
+http_filter_pattern = re.compile ('(https?://[A-Za-z0-9\'~+\-=_.,/%\?!;:@#\*&\(\)]+)')
+string_filter_pattern = re.compile (u'([0-9A-Za-z⺀-⿕ぁ-ヾ㐀-䶵一-龥豈-舘０-９Ａ-Ｚａ-ｚｦ-ﾝ]+)')
 query_list = ['賛成','反対']
 
-def httpFilter(line):
-    if "http" in line:
-        temp = line
-        line = link_pattern.sub(u"", temp)
+def stringFilter(line):
+    line = http_filter_pattern.sub(" ", line)
+    line = string_filter_pattern.findall(line)
+    line = u"、".join(line)
     return line
 
 def preformat(line):
     """一行を受け取り形態素解析をしてリストを返す
        連続した名詞はできるだけ長くなるように結合する
        見やすいように名詞であっても記号は取り除く"""
-    line = re.sub(re.compile("[!-/:-@[-`{-~]"), ' ', line)
+#    line = re.sub(re.compile("[!-/:-@[-`{-~]"), ' ', line)
     tagger = MeCab.Tagger('')
     encoded_line = line.encode('utf-8')
     node = tagger.parseToNode(encoded_line)
@@ -46,7 +48,7 @@ def preformat(line):
 
 def setTweet(line):
     tweet = simplejson.loads(line,"utf-8")
-    tweet["text"] = httpFilter(tweet["text"])
+    tweet["text"] = stringFilter(tweet["text"])
     tweet_text = preformat(tweet["text"])[:-1]
     return tweet_text
 
@@ -93,14 +95,6 @@ def listsToDict(lists,dictionary):
             else:
                 dictionary[word] = 1
 
-def writeOutput(output,dictionary,top_line):
-    counter = 0
-    output.write(top_line)
-    for key,value in sorted(dictionary.items(),key=lambda x:x[1],reverse=True):
-        counter += 1
-        output.write(str(counter) + ':' + key + '\t' + str(value) +'\n')
-    output.write('\n')
-
 def separete2Lists(results_tuples,listsA,listsB):
     for tupl in results_tuples:
         listsA.append(tupl[0])
@@ -109,11 +103,19 @@ def separete2Lists(results_tuples,listsA,listsB):
 def writeProbabilityDict(output,dictionary,total_tweet,string):
     probability_dict = {}
     for key,value in dictionary.items():
-        probability_dict[key] = float(value) / total_tweet
+        probability_dict[key] = Decimal(value) / total_tweet
         # if probability_dict[key] < 0.00001:
         #     del probability_dict[key]
         #     break
     writeOutput(output,probability_dict,string)
+
+def writeOutput(output,dictionary,top_line):
+    counter = 0
+    output.write(top_line)
+    for key,value in sorted(dictionary.items(),key=lambda x:x[1],reverse=True):
+        counter += 1
+        output.write(str(counter) + ':' + key + '\n\t\t' + str(value) +'\n')
+    output.write('\n')
 
     
 def main():
