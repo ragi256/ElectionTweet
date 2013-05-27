@@ -8,9 +8,6 @@ class Distributer(object):
     __all_words = []
     __election_words = []
     def __init__ (self):
-        pass
-    
-    def reset(self):
         self.__all_words = []
         self.__election_words = []
 
@@ -67,11 +64,11 @@ class Distributer(object):
         output.write('\n')
         
     def passElection(self):
-        self.__election_words = list(set(self.__election_words))
+#        self.__election_words = list(set(self.__election_words))
         return self.__election_words
 
 
     def passAll(self):
-        self.__all_words = list(set(self.__all_words))                         
+#        self.__all_words = list(set(self.__all_words))           
         return self.__all_words
 
