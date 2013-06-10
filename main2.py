@@ -22,9 +22,8 @@ def function1(line,queue,counter,tenth):
     else:
         dist.extractToAll(tweet_text)
     progress(counter,tenth)
-    #if dist.passElection() != []:
-    #    print ",".join(dist.passElection())
     queue.put(list(set(dist.passElection() )) )
+#    conn.send(list(set(dist.passElection() )) )
     
 def function2(line,queue,relevant_word_list,counter,tenth):
     appearance_list = []
@@ -35,9 +34,8 @@ def function2(line,queue,relevant_word_list,counter,tenth):
                 appearance_list.append(query)
                 break
     progress(counter,tenth)
-    #if appearance_list != []:
-    #    print ",".join(appearance_list)
     queue.put(list(set(appearance_list)) )
+#    conn.send(list(set(dist.passElection() )) )
     
 def progress(counter,tenth):
     if counter.value%tenth == 0:
@@ -45,25 +43,16 @@ def progress(counter,tenth):
         print prog + '\r',
     counter.value += 1
 
-def setDictProcess(queue,dic):
-    word_list = queue.get()
-    for word in word_list:
-        if word in dic.keys():
-            dic[word] += 1
-        else:
-            dic[word] = 1
+def setDictProcess(queue,conn,flag):
+    dic = {}
+    flag.value = True
+    while flag.value:
+        word_list = queue.get()
+        listToDict(word_list,dic)
+        if queue.empty():
+            time.sleep(0.5)
+    conn.send(dic)
     
-def listsToDict(lists,dictionary):
-    for list in lists:
-        listToDict(list,dictionary)
-        
-def listToDict(list,dictionary):
-        for word in list:
-            if word in dictionary.keys():
-                dictionary[word] += 1
-            else:
-                dictionary[word] = 1
-
 def writeProbabilityDict(output,dictionary,total_tweet,string):
     print 'データを出力します'
     probability_dict = {}
@@ -79,6 +68,21 @@ def writeOutput(output,dictionary,top_line):
         output.write(str(counter) + ':' + key + '\n\t\t' + str(value) +'\n')
     output.write('\n')
 
+def listsToDict(lists,dictionary):
+    """[ ['A','B','C'],['D','A','B'],['A','A','A'] ]
+       {'A':5, 'B':2, 'C':1, 'D':1}"""
+    for list in lists:
+        listToDict(list,dictionary)
+        
+def listToDict(list,dictionary):
+    """['A','B','C','A','D','C','C','B','A']
+       {'A':3, 'B':2, 'C':3, 'D':1}"""
+    for word in list:
+        if word in dictionary.keys():
+            dictionary[word] += 1
+        else:
+            dictionary[word] = 1
+
 def exceptionMessage(e):
     print '=== エラー内容 ==='
     print 'type:' + str(type(e))
@@ -89,7 +93,6 @@ def exceptionMessage(e):
 if __name__ == '__main__':
     argv = sys.argv
     starttime = time.time()
-    manager = multiprocessing.Manager()
     Input = gzip.open(argv[1], 'r')
     output1 = open(argv[2], 'w')
     output2 = open(argv[3], 'w') 
@@ -97,30 +100,32 @@ if __name__ == '__main__':
     print argv[1] + 'は' + str(total_tweet) + '行あります'
     tenth = total_tweet / 10   
     queue = multiprocessing.Queue()
-    
+    result_receiver,result_sender = multiprocessing.Pipe()
     counter = multiprocessing.Value('i',0)
+    flag = multiprocessing.Value('i',0)
     print '関連語抽出処理を開始します'
     Input.seek(0)
-    ps = []
     try:
         logger = multiprocessing.log_to_stderr()
         logger.setLevel(logging.WARNING)
-
-        relevant_dict = manager.dict()
-        set_dic_process = multiprocessing.Process(target=setDictProcess,
-                                                  args=(queue,relevant_dict))
+        set_dic_process = multiprocessing.Process(name='setDict',
+                                                  target=setDictProcess,
+                                                  args=(queue,result_sender,flag))
         set_dic_process.start()
-        for line in Input:
-#            if len(ps) < 20:
-            p = multiprocessing.Process(target=function1,
-                                        args=(line,queue,counter,tenth))
+        process = [multiprocessing.Process(target=function1,
+                                           args=(line,queue,counter,tenth))
+                   for line in Input]
+        for p in process:
             p.start()
-            ps.append(p)
+        for p in process:
             p.join()
+
+        flag = False
+        relevant_dict = result_receiver.recv()
         set_dic_process.join()
     except Exception as e:
         exceptionMessage(e)
-        for p in ps:
+        for p in process:
             p.terminate()
         print 'プログラムを終了します'
         sys.exit()
@@ -131,27 +136,30 @@ if __name__ == '__main__':
     counter.value = 0
     print '関連語登場回数測定を開始します'
     Input.seek(0)
-    ps = []
     try:
         logger = multiprocessing.log_to_stderr()
         logger.setLevel(logging.WARNING)
 
-        appear_rate_dict = manager.dict()
-        set_dic_process = multiprocessing.Process(target=setDictProcess,
-                                                  args=(queue,relevant_dict))
+        event.set()
+        set_dic_process = multiprocessing.Process(name='setDict',
+                                                  target=setDictProcess,
+                                                  args=(parent_conn,relevant_dict,flag))
         set_dic_process.start()
-        for line in Input:
-#            if len(ps) < 20:
-            p = multiprocessing.Process(target=function2,
-                                        args=(line,queue,
-                                              relevant_dict.keys(),counter,tenth))
+        process = [multiprocessing.Process(target=function2,
+                                           args=(line,child_conn,
+                                                 relevant_dict.keys(),counter,tenth))
+                   for line in Input]
+        for p in process:
             p.start()
-            ps.append(p)
+        for p in process:
             p.join()
+
+        flag = False
+        appear_rate_dict = result_receiver.recv()
         set_dic_process.join()
     except Exception as e:
         exceptionMessage(e)
-        for p in ps:
+        for p in process:
             p.terminate()
         print 'プログラムを終了します'
         sys.exit()
