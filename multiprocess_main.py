@@ -23,7 +23,6 @@ def function1(line,queue,counter,tenth):
         dist.extractToAll(tweet_text)
     progress(counter,tenth)
     queue.put(list(set(dist.passElection() )) )
-#    conn.send(list(set(dist.passElection() )) )
     
 def function2(line,queue,relevant_word_list,counter,tenth):
     appearance_list = []
@@ -35,7 +34,6 @@ def function2(line,queue,relevant_word_list,counter,tenth):
                 break
     progress(counter,tenth)
     queue.put(list(set(appearance_list)) )
-#    conn.send(list(set(dist.passElection() )) )
     
 def progress(counter,tenth):
     if counter.value%tenth == 0:
@@ -47,10 +45,11 @@ def setDictProcess(queue,conn,flag):
     dic = {}
     flag.value = True
     while flag.value:
-        word_list = queue.get()
-        listToDict(word_list,dic)
         if queue.empty():
-            time.sleep(0.5)
+            time.sleep(0.01)
+        else:
+            word_list = queue.get()
+            listToDict(word_list,dic)
     conn.send(dic)
     
 def writeProbabilityDict(output,dictionary,total_tweet,string):
@@ -94,6 +93,7 @@ if __name__ == '__main__':
     argv = sys.argv
     starttime = time.time()
     Input = gzip.open(argv[1], 'r')
+#    Input = open(argv[1], 'r')
     output1 = open(argv[2], 'w')
     output2 = open(argv[3], 'w') 
     total_tweet = sum(1 for line in Input)
@@ -108,21 +108,24 @@ if __name__ == '__main__':
     try:
         logger = multiprocessing.log_to_stderr()
         logger.setLevel(logging.WARNING)
+
         set_dic_process = multiprocessing.Process(name='setDict',
                                                   target=setDictProcess,
                                                   args=(queue,result_sender,flag))
         set_dic_process.start()
+                
         process = [multiprocessing.Process(target=function1,
                                            args=(line,queue,counter,tenth))
                    for line in Input]
         for p in process:
             p.start()
+
+        flag.value = False
+        relevant_dict = result_receiver.recv()
         for p in process:
             p.join()
-
-        flag = False
-        relevant_dict = result_receiver.recv()
         set_dic_process.join()
+
     except Exception as e:
         exceptionMessage(e)
         for p in process:
@@ -140,23 +143,25 @@ if __name__ == '__main__':
         logger = multiprocessing.log_to_stderr()
         logger.setLevel(logging.WARNING)
 
-        event.set()
         set_dic_process = multiprocessing.Process(name='setDict',
                                                   target=setDictProcess,
-                                                  args=(parent_conn,relevant_dict,flag))
+                                                  args=(queue,result_sender,flag))
+        keys = relevant_dict.keys()
+        del relevant_dict
         set_dic_process.start()
         process = [multiprocessing.Process(target=function2,
-                                           args=(line,child_conn,
-                                                 relevant_dict.keys(),counter,tenth))
+                                           args=(line,queue,keys,counter,tenth))
                    for line in Input]
         for p in process:
             p.start()
+
+        flag.value = False
+        appear_rate_dict = result_receiver.recv()
         for p in process:
             p.join()
-
-        flag = False
-        appear_rate_dict = result_receiver.recv()
         set_dic_process.join()
+        
+
     except Exception as e:
         exceptionMessage(e)
         for p in process:
